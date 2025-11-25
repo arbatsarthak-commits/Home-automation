@@ -1,0 +1,11 @@
+services:
+  smartnest:
+    build: .
+    ports:
+      - "8501:8501"
+    environment:
+      MQTT_BROKER: ${MQTT_BROKER}
+      MQTT_USERNAME: ${MQTT_USERNAME}
+      MQTT_PASSWORD: ${MQTT_PASSWORD}
+    restart: unless-stopped
+

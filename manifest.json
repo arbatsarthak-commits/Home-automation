@@ -1,0 +1,17 @@
+{
+  "name": "SmartNest",
+  "short_name": "SmartNest",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#6366f1",
+  "description": "MQTT-powered SmartNest home automation cockpit",
+  "icons": [
+    {
+      "src": "https://fav.farm/⚡",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ]
+}
+

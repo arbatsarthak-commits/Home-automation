@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="SmartNest — fully loaded MQTT-powered home automation cockpit with analytics, automation scenes, monitoring, and security">
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/png" href="https://fav.farm/⚡">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <title>SmartNest · Hyper-Responsive MQTT Control Center</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="particleLayer" aria-hidden="true"></div>
+    <div id="pinLockOverlay" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="pinLockTitle">
+        <div class="modal-card">
+            <h2 id="pinLockTitle">Secure Access</h2>
+            <p>Enter your 4-digit SmartNest PIN to unlock the console.</p>
+            <label>
+                <span class="sr-only">PIN code</span>
+                <input type="password" inputmode="numeric" maxlength="4" id="pinInput">
+            </label>
+            <div class="modal-actions">
+                <button id="pinSubmit" class="primary">Unlock</button>
+                <button id="pinReset" class="secondary">Reset PIN</button>
+            </div>
+            <p class="modal-subtle" id="pinAttempts">Attempts left: 5</p>
+        </div>
+    </div>
+
+    <div id="toastStack" class="toast-stack" aria-live="assertive" aria-atomic="true"></div>
+    <div id="installPrompt" class="banner hidden">
+        <span>Install SmartNest to your home screen for instant access.</span>
+        <div>
+            <button id="installBtn" class="primary sm">Install</button>
+            <button id="dismissInstall" class="ghost sm">Later</button>
+        </div>
+    </div>
+
+    <main class="app-shell">
+        <header class="glass-panel hero">
+            <div class="hero-branding">
+                <p class="eyebrow">SmartNest</p>
+                <h1>Enterprise-grade home automation cockpit</h1>
+                <p>Control, automate, and monitor your ESP8266 devices with live MQTT telemetry, analytics, and security-first operations.</p>
+                <div class="hero-actions">
+                    <button class="primary" data-action="scene" data-scene="good-morning">☀️ Good Morning</button>
+                    <button class="ghost" id="voiceBtn">🎙️ Voice Command</button>
+                    <button class="ghost" id="macroBtn">⚡ Quick Macro</button>
+                </div>
+            </div>
+            <div class="hero-status">
+                <div class="status-indicator" id="connectionStatus">
+                    <span class="pulse-dot"></span>
+                    <div>
+                        <p class="status-label">Status</p>
+                        <p class="status-value">Connecting…</p>
+                    </div>
+                </div>
+                <div class="status-grid">
+                    <div class="status-chip">
+                        <p>MQTT Queue</p>
+                        <span id="queueSize">0</span>
+                    </div>
+                    <div class="status-chip">
+                        <p>Devices Online</p>
+                        <span id="devicesOnline">0</span>
+                    </div>
+                    <div class="status-chip">
+                        <p>Latency</p>
+                        <span id="latencyValue">—</span>
+                    </div>
+                    <div class="status-chip">
+                        <p>Uptime</p>
+                        <span id="uptimeValue">—</span>
+                    </div>
+                </div>
+                <div class="toggle-cluster">
+                    <label class="toggle">
+                        <input type="checkbox" id="themeToggle">
+                        <span>Dark</span>
+                    </label>
+                    <label class="toggle">
+                        <input type="checkbox" id="contrastToggle">
+                        <span>High Contrast</span>
+                    </label>
+                    <label class="toggle">
+                        <input type="checkbox" id="soundToggle" checked>
+                        <span>Sound</span>
+                    </label>
+                </div>
+            </div>
+        </header>
+
+        <section class="grid analytics" aria-label="Analytics overview">
+            <article class="card glass">
+                <h2>Quick Stats</h2>
+                <ul class="stats-grid" id="quickStats"></ul>
+            </article>
+            <article class="card glass">
+                <h2>Energy Gauge</h2>
+                <div id="energyGauge" class="gauge"></div>
+            </article>
+            <article class="card glass">
+                <h2>Connection Health</h2>
+                <div class="health-grid">
+                    <div>
+                        <p>Quality</p>
+                        <div id="connectionQuality" class="health-bar"></div>
+                    </div>
+                    <div>
+                        <p>Reconnections</p>
+                        <span id="reconnectCount">0</span>
+                    </div>
+                    <div>
+                        <p>Auto-Retry</p>
+                        <span id="autoRetry">Enabled</span>
+                    </div>
+                </div>
+            </article>
+        </section>
+
+        <section class="glass card" aria-label="Scenes and automation">
+            <div class="section-head">
+                <h2>Scene Automation</h2>
+                <div>
+                    <button class="ghost sm" id="createSceneBtn">➕ Custom Scene</button>
+                    <button class="ghost sm" id="manageScenesBtn">⚙️ Manage</button>
+                </div>
+            </div>
+            <div class="scene-grid" id="sceneGrid"></div>
+        </section>
+
+        <section class="grid device-grid" id="deviceGrid" aria-label="Device management"></section>
+
+        <section class="grid monitoring">
+            <article class="card glass">
+                <div class="section-head">
+                    <h2>Activity Timeline</h2>
+                    <span id="commandCount">0 cmds</span>
+                </div>
+                <ul id="activityTimeline" class="timeline"></ul>
+            </article>
+            <article class="card glass">
+                <h2>Live Queue</h2>
+                <div id="queueVisualizer" class="queue-visualizer"></div>
+            </article>
+            <article class="card glass">
+                <h2>Device History</h2>
+                <div id="deviceHistory" class="history"></div>
+            </article>
+        </section>
+
+        <section class="grid dataviz">
+            <article class="card glass">
+                <h2>Servo Position History</h2>
+                <div id="servoChart"></div>
+            </article>
+            <article class="card glass">
+                <h2>Device On/Off Duration</h2>
+                <div id="durationChart"></div>
+            </article>
+            <article class="card glass">
+                <h2>Energy Distribution</h2>
+                <div id="energyDonut"></div>
+            </article>
+            <article class="card glass">
+                <h2>Command Activity</h2>
+                <div id="activityArea"></div>
+            </article>
+            <article class="card glass">
+                <h2>Usage Heatmap</h2>
+                <div id="usageHeatmap"></div>
+            </article>
+        </section>
+
+        <section class="grid advanced">
+            <article class="card glass">
+                <h2>Advanced Controls</h2>
+                <div class="control-row">
+                    <label>Voice Command</label>
+                    <div class="input-row">
+                        <input type="text" id="voiceInput" placeholder="e.g. turn on led1">
+                        <button class="primary sm" id="voiceSubmit">Send</button>
+                    </div>
+                </div>
+                <div class="control-row">
+                    <label>Batch Operations</label>
+                    <div class="input-row">
+                        <select id="batchSelect">
+                            <option value="all-on">All On</option>
+                            <option value="all-off">All Off</option>
+                            <option value="lights-on">Lights On</option>
+                            <option value="motor-cycle">Motor Cycle</option>
+                        </select>
+                        <button class="ghost sm" id="batchExecute">Run</button>
+                    </div>
+                </div>
+                <div class="control-row">
+                    <label>Device Profile</label>
+                    <div class="input-row">
+                        <select id="profileSelect">
+                            <option value="eco">Eco Saver</option>
+                            <option value="comfort">Comfort</option>
+                            <option value="party">Party Mode</option>
+                        </select>
+                        <button class="ghost sm" id="profileApply">Apply</button>
+                    </div>
+                </div>
+                <p class="hotkeys">Keyboard: Space toggle focused device · Arrows servo · Ctrl+M motor</p>
+            </article>
+
+            <article class="card glass">
+                <h2>User Preferences</h2>
+                <form id="preferencesForm" class="prefs">
+                    <label>
+                        Theme
+                        <select name="theme">
+                            <option value="dark">Dark</option>
+                            <option value="light">Light</option>
+                            <option value="auto">Auto</option>
+                        </select>
+                    </label>
+                    <label>
+                        Notifications
+                        <select name="notifications">
+                            <option value="toast-sound">Toast + Sound</option>
+                            <option value="toast">Toast only</option>
+                            <option value="silent">Silent</option>
+                        </select>
+                    </label>
+                    <label>
+                        Default Servo Angle
+                        <input type="number" name="servoDefault" min="0" max="180" value="90">
+                    </label>
+                    <label>
+                        Auto reconnect
+                        <select name="autoReconnect">
+                            <option value="on">On</option>
+                            <option value="off">Off</option>
+                        </select>
+                    </label>
+                    <label>
+                        Session Timeout (min)
+                        <input type="number" name="sessionTimeout" min="1" max="120" value="15">
+                    </label>
+                    <div class="prefs-actions">
+                        <button type="submit" class="primary sm">Save</button>
+                        <button type="button" id="exportData" class="ghost sm">Export JSON</button>
+                        <label class="ghost sm file-label">
+                            Import
+                            <input type="file" id="importData" accept="application/json">
+                        </label>
+                    </div>
+                </form>
+            </article>
+
+            <article class="card glass">
+                <h2>Security & Notifications</h2>
+                <div class="security-grid">
+                    <button class="ghost sm" id="lockConsole">🔒 Lock Console</button>
+                    <button class="ghost sm" id="enableDesktopNoti">🖥️ Desktop Alerts</button>
+                    <label class="toggle">
+                        <input type="checkbox" id="criticalConfirm" checked>
+                        <span>Action Confirmations</span>
+                    </label>
+                    <label class="toggle">
+                        <input type="checkbox" id="soundEffects" checked>
+                        <span>FX</span>
+                    </label>
+                </div>
+                <div class="log" id="activityLog"></div>
+            </article>
+        </section>
+
+        <footer class="glass footer">
+            <div>
+                <strong>SmartNest v1.0.0</strong> · Branch strategy: main / develop · CI ready
+            </div>
+            <div>
+                <span id="sessionStatus">Session active</span> · <button class="link" id="openDocs">Deployment Guide</button>
+            </div>
+        </footer>
+    </main>
+
+    <nav class="mobile-nav">
+        <button data-nav="devices" class="active">Devices</button>
+        <button data-nav="scenes">Scenes</button>
+        <button data-nav="analytics">Analytics</button>
+        <button data-nav="settings">Settings</button>
+    </nav>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/5.3.5/mqtt.umd.min.js" integrity="sha512-2ySGIN1qNbfXDnpa9eKJeNEqXWiwxupCSvJzpuG1HsfrN7kYM/qf+oCuWHa3gwxM/H2ymlk/wEYBLETymFcpPg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/blueimp-md5/2.19.0/js/md5.min.js" integrity="sha512-McQwDFi1Cdm42Hcps225y7sY9qsK0kGugHgdGXNq35p3xNmPR9U1FVLtZL1NVr7DiIP9N6byjHgNsZM3Rp3crw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src="app.js" type="module"></script>
+</body>
+</html>
+
