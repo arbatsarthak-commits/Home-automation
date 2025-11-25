@@ -1,302 +1,999 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="SmartNest — fully loaded MQTT-powered home automation cockpit with analytics, automation scenes, monitoring, and security">
-    <link rel="manifest" href="manifest.json">
-    <link rel="icon" type="image/png" href="https://fav.farm/⚡">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartNest Home Automation Dashboard</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <title>SmartNest · Hyper-Responsive MQTT Control Center</title>
-    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <style>
+        :root {
+            --gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --surface: rgba(255, 255, 255, 0.85);
+            --surface-dark: rgba(20, 20, 30, 0.9);
+            --text: #1f2341;
+            --text-muted: #5c6080;
+            --success: #28a745;
+            --danger: #dc3545;
+            --warning: #ffc107;
+            --card-shadow: 0 25px 70px rgba(0, 0, 0, 0.25);
+            --blur: 20px;
+        }
+
+        [data-theme="dark"] {
+            --surface: rgba(21, 21, 35, 0.8);
+            --text: #f5f7ff;
+            --text-muted: #b0b5d1;
+            --card-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+        }
+
+        [data-contrast="high"] {
+            --surface: #ffffff;
+            --text: #000000;
+            --text-muted: #222;
+            --card-shadow: none;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--gradient);
+            min-height: 100vh;
+            color: var(--text);
+            padding: 32px;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            transition: background 0.6s ease, color 0.3s ease;
+        }
+
+        body.dark {
+            background: radial-gradient(circle at top, #1a1b2f, #0c0d19 60%            );
+        }
+
+        .app-shell {
+            width: min(1200px, 100%);
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .glass-panel {
+            background: var(--surface);
+            border-radius: 24px;
+            padding: 24px 28px;
+            backdrop-filter: blur(var(--blur));
+            box-shadow: var(--card-shadow);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        header {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 18px;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .branding {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .branding h1 {
+            font-size: clamp(1.8rem, 4vw, 2.4rem);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 16px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.2);
+            font-weight: 600;
+            backdrop-filter: blur(10px);
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: var(--warning);
+            animation: pulse 2s infinite;
+        }
+
+        .status-text {
+            font-size: 0.95rem;
+        }
+
+        .status-indicator.connected .status-dot {
+            background: var(--success);
+        }
+
+        .status-indicator.error .status-dot {
+            background: var(--danger);
+        }
+
+        .header-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .toggle {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 16px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            background: rgba(0, 0, 0, 0.05);
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .toggle input {
+            appearance: none;
+            width: 42px;
+            height: 22px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.4);
+            position: relative;
+            outline: none;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            transition: background 0.3s ease;
+        }
+
+        .toggle input::after {
+            content: '';
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: white;
+            position: absolute;
+            top: 1px;
+            left: 2px;
+            transition: transform 0.3s ease;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+        }
+
+        .toggle input:checked {
+            background: var(--gradient);
+        }
+
+        .toggle input:checked::after {
+            transform: translateX(18px);
+        }
+
+        .quick-actions {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
+        }
+
+        .quick-button {
+            border: none;
+            border-radius: 20px;
+            padding: 16px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: white;
+            background: var(--gradient);
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .quick-button span {
+            display: block;
+            font-size: 0.8rem;
+            opacity: 0.8;
+            font-weight: 500;
+        }
+
+        .quick-button::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.4);
+            transform: translate(-50%, -50%);
+            transition: width 0.4s ease, height 0.4s ease;
+        }
+
+        .quick-button:active::after {
+            width: 200px;
+            height: 200px;
+        }
+
+        .quick-button:hover,
+        .card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25);
+        }
+
+        .dashboard {
+            display: grid;
+            gap: 24px;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        }
+
+        .card {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+            padding: 24px;
+            border-radius: 24px;
+            background: var(--surface);
+            backdrop-filter: blur(var(--blur));
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: var(--card-shadow);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            padding: 1px;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0));
+            mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            mask-composite: exclude;
+            pointer-events: none;
+        }
+
+        .device-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+        }
+
+        .device-meta {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .device-meta span {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+        }
+
+        .device-icon {
+            width: 54px;
+            height: 54px;
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.3);
+            display: grid;
+            place-items: center;
+            font-size: 1.8rem;
+            animation: float 3s ease-in-out infinite;
+        }
+
+        .status-badge {
+            padding: 6px 14px;
+            border-radius: 999px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .status-badge.on {
+            color: var(--success);
+            background: rgba(40, 167, 69, 0.12);
+        }
+
+        .status-badge.off {
+            color: var(--danger);
+            background: rgba(220, 53, 69, 0.12);
+        }
+
+        .status-badge.running {
+            color: var(--warning);
+            background: rgba(255, 193, 7, 0.12);
+        }
+
+        .control-buttons {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(120px, 1fr));
+            gap: 12px;
+        }
+
+        .control-button {
+            border: none;
+            border-radius: 16px;
+            padding: 14px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: white;
+            background: rgba(255, 255, 255, 0.2);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .control-button[data-state="on"] {
+            background: linear-gradient(120deg, #4facfe, #667eea);
+        }
+
+        .control-button[data-state="off"] {
+            background: linear-gradient(120deg, #f5576c, #f093fb);
+        }
+
+        .control-button.loading {
+            pointer-events: none;
+            opacity: 0.6;
+        }
+
+        .control-button.active {
+            box-shadow: 0 0 20px rgba(102, 126, 234, 0.5);
+            transform: translateY(-2px);
+        }
+
+        .servo-control {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .range-input {
+            appearance: none;
+            -webkit-appearance: none;
+            width: 100%;
+            height: 6px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.4);
+            outline: none;
+        }
+
+        .range-input::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: var(--gradient);
+            border: 2px solid white;
+            cursor: pointer;
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .servo-angle {
+            font-size: 1.4rem;
+            font-weight: 700;
+            text-align: center;
+            color: #667eea;
+        }
+
+        .timestamp {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .grid-span-2 {
+            grid-column: span 2;
+        }
+
+        .activity-log, .energy-card {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .activity-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .activity-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 12px;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.2);
+            font-size: 0.9rem;
+        }
+
+        .energy-stats {
+            display: flex;
+            gap: 18px;
+            flex-wrap: wrap;
+        }
+
+        .energy-chip {
+            flex: 1;
+            min-width: 140px;
+            padding: 12px;
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .toast-container {
+            position: fixed;
+            top: 24px;
+            right: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            z-index: 10;
+        }
+
+        .toast {
+            min-width: 240px;
+            padding: 14px 18px;
+            border-radius: 16px;
+            background: var(--surface);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+            animation: slideIn 0.4s ease, fadeOut 0.4s ease 4s forwards;
+        }
+
+        .footer {
+            display: flex;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 12px;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.2);
+            font-weight: 600;
+        }
+
+        .link-button {
+            border: none;
+            background: none;
+            color: inherit;
+            font-weight: 600;
+            text-decoration: underline;
+            cursor: pointer;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 0.9; }
+            50% { transform: scale(1.2); opacity: 1; }
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-6px); }
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes fadeOut {
+            to { opacity: 0; transform: translateY(-10px); }
+        }
+
+        @media (max-width: 1024px) {
+            .dashboard {
+                grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            }
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 18px;
+            }
+            header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            .control-buttons {
+                grid-template-columns: 1fr;
+            }
+            .grid-span-2 {
+                grid-column: span 1;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .quick-actions {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        :focus-visible {
+            outline: 2px solid #764ba2;
+            outline-offset: 4px;
+        }
+    </style>
 </head>
-<body>
-    <div id="particleLayer" aria-hidden="true"></div>
-    <div id="pinLockOverlay" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="pinLockTitle">
-        <div class="modal-card">
-            <h2 id="pinLockTitle">Secure Access</h2>
-            <p>Enter your 4-digit SmartNest PIN to unlock the console.</p>
-            <label>
-                <span class="sr-only">PIN code</span>
-                <input type="password" inputmode="numeric" maxlength="4" id="pinInput">
-            </label>
-            <div class="modal-actions">
-                <button id="pinSubmit" class="primary">Unlock</button>
-                <button id="pinReset" class="secondary">Reset PIN</button>
+<body data-theme="light" data-contrast="normal">
+    <div class="toast-container" aria-live="polite" aria-atomic="true"></div>
+    <main class="app-shell" role="main">
+        <header class="glass-panel" aria-label="Application header">
+            <div class="branding">
+                <h1>SmartNest <span class="badge">Home Automation</span></h1>
+                <p>Monitor and control your ESP8266 powered home in real-time.</p>
             </div>
-            <p class="modal-subtle" id="pinAttempts">Attempts left: 5</p>
-        </div>
-    </div>
-
-    <div id="toastStack" class="toast-stack" aria-live="assertive" aria-atomic="true"></div>
-    <div id="installPrompt" class="banner hidden">
-        <span>Install SmartNest to your home screen for instant access.</span>
-        <div>
-            <button id="installBtn" class="primary sm">Install</button>
-            <button id="dismissInstall" class="ghost sm">Later</button>
-        </div>
-    </div>
-
-    <main class="app-shell">
-        <header class="glass-panel hero">
-            <div class="hero-branding">
-                <p class="eyebrow">SmartNest</p>
-                <h1>Enterprise-grade home automation cockpit</h1>
-                <p>Control, automate, and monitor your ESP8266 devices with live MQTT telemetry, analytics, and security-first operations.</p>
-                <div class="hero-actions">
-                    <button class="primary" data-action="scene" data-scene="good-morning">☀️ Good Morning</button>
-                    <button class="ghost" id="voiceBtn">🎙️ Voice Command</button>
-                    <button class="ghost" id="macroBtn">⚡ Quick Macro</button>
-                </div>
+            <div class="status-indicator" id="connectionStatus" role="status" aria-live="polite">
+                <span class="status-dot"></span>
+                <div class="status-text">Connecting…</div>
             </div>
-            <div class="hero-status">
-                <div class="status-indicator" id="connectionStatus">
-                    <span class="pulse-dot"></span>
-                    <div>
-                        <p class="status-label">Status</p>
-                        <p class="status-value">Connecting…</p>
-                    </div>
-                </div>
-                <div class="status-grid">
-                    <div class="status-chip">
-                        <p>MQTT Queue</p>
-                        <span id="queueSize">0</span>
-                    </div>
-                    <div class="status-chip">
-                        <p>Devices Online</p>
-                        <span id="devicesOnline">0</span>
-                    </div>
-                    <div class="status-chip">
-                        <p>Latency</p>
-                        <span id="latencyValue">—</span>
-                    </div>
-                    <div class="status-chip">
-                        <p>Uptime</p>
-                        <span id="uptimeValue">—</span>
-                    </div>
-                </div>
-                <div class="toggle-cluster">
-                    <label class="toggle">
-                        <input type="checkbox" id="themeToggle">
-                        <span>Dark</span>
-                    </label>
-                    <label class="toggle">
-                        <input type="checkbox" id="contrastToggle">
-                        <span>High Contrast</span>
-                    </label>
-                    <label class="toggle">
-                        <input type="checkbox" id="soundToggle" checked>
-                        <span>Sound</span>
-                    </label>
-                </div>
+            <div class="header-actions" role="group" aria-label="Display preferences">
+                <label class="toggle" aria-label="Toggle dark mode">
+                    <input type="checkbox" id="darkModeToggle" tabindex="0">
+                    🌙
+                </label>
+                <label class="toggle" aria-label="Toggle high contrast mode">
+                    <input type="checkbox" id="contrastToggle" tabindex="0">
+                    ⚡
+                </label>
             </div>
         </header>
 
-        <section class="grid analytics" aria-label="Analytics overview">
-            <article class="card glass">
-                <h2>Quick Stats</h2>
-                <ul class="stats-grid" id="quickStats"></ul>
-            </article>
-            <article class="card glass">
-                <h2>Energy Gauge</h2>
-                <div id="energyGauge" class="gauge"></div>
-            </article>
-            <article class="card glass">
-                <h2>Connection Health</h2>
-                <div class="health-grid">
-                    <div>
-                        <p>Quality</p>
-                        <div id="connectionQuality" class="health-bar"></div>
+        <section class="glass-panel quick-actions" aria-label="Quick presets">
+            <button class="quick-button" data-preset="all-on" aria-label="Turn on all lights">
+                All Lights On
+                <span>LED 1 · LED 2 · Bulb</span>
+            </button>
+            <button class="quick-button" data-preset="night" aria-label="Activate night mode">
+                Night Mode
+                <span>Lights dim · Motor off</span>
+            </button>
+            <button class="quick-button" data-preset="goodbye" aria-label="Turn everything off">
+                Goodbye
+                <span>All devices standby</span>
+            </button>
+            <button class="quick-button" data-preset="morning" aria-label="Morning scene">
+                Morning Boost
+                <span>Lights on · Servo 45°</span>
+            </button>
+        </section>
+
+        <section class="dashboard" aria-label="Device controls">
+            <article class="card" data-device="led1" tabindex="0" aria-live="polite">
+                <div class="device-header">
+                    <div class="device-meta">
+                        <h2>LED 1</h2>
+                        <span>Living Room Accent</span>
+                        <div class="timestamp" data-timestamp="led1">—</div>
                     </div>
-                    <div>
-                        <p>Reconnections</p>
-                        <span id="reconnectCount">0</span>
+                    <div class="device-icon" aria-hidden="true">💡</div>
+                </div>
+                <div class="status-badge off" data-status="led1">OFF</div>
+                <div class="control-buttons" role="group" aria-label="LED 1 controls">
+                    <button class="control-button" data-action="on" data-topic="home/led1" data-label="LED 1 On" aria-pressed="false" data-state="on">Turn On</button>
+                    <button class="control-button" data-action="off" data-topic="home/led1" data-label="LED 1 Off" aria-pressed="true" data-state="off">Turn Off</button>
+                </div>
+            </article>
+
+            <article class="card" data-device="led2" tabindex="0" aria-live="polite">
+                <div class="device-header">
+                    <div class="device-meta">
+                        <h2>LED 2</h2>
+                        <span>Garden Pathway</span>
+                        <div class="timestamp" data-timestamp="led2">—</div>
                     </div>
-                    <div>
-                        <p>Auto-Retry</p>
-                        <span id="autoRetry">Enabled</span>
+                    <div class="device-icon" aria-hidden="true">✨</div>
+                </div>
+                <div class="status-badge off" data-status="led2">OFF</div>
+                <div class="control-buttons" role="group" aria-label="LED 2 controls">
+                    <button class="control-button" data-action="on" data-topic="home/led2" data-label="LED 2 On" data-state="on">Turn On</button>
+                    <button class="control-button" data-action="off" data-topic="home/led2" data-label="LED 2 Off" data-state="off">Turn Off</button>
+                </div>
+            </article>
+
+            <article class="card" data-device="bulb" tabindex="0">
+                <div class="device-header">
+                    <div class="device-meta">
+                        <h2>Bulb (AC)</h2>
+                        <span>Dining Chandelier</span>
+                        <div class="timestamp" data-timestamp="bulb">—</div>
+                    </div>
+                    <div class="device-icon" aria-hidden="true">🔆</div>
+                </div>
+                <div class="status-badge off" data-status="bulb">OFF</div>
+                <div class="control-buttons" role="group" aria-label="Bulb controls">
+                    <button class="control-button" data-action="on" data-topic="home/bulb" data-label="Bulb On" data-state="on">Turn On</button>
+                    <button class="control-button" data-action="off" data-topic="home/bulb" data-label="Bulb Off" data-state="off">Turn Off</button>
+                </div>
+            </article>
+
+            <article class="card" data-device="motor" tabindex="0">
+                <div class="device-header">
+                    <div class="device-meta">
+                        <h2>DC Motor</h2>
+                        <span>Ventilation Fan</span>
+                        <div class="timestamp" data-timestamp="motor">—</div>
+                    </div>
+                    <div class="device-icon" aria-hidden="true">⚙️</div>
+                </div>
+                <div class="status-badge off" data-status="motor">OFF</div>
+                <div class="control-buttons" role="group" aria-label="Motor controls">
+                    <button class="control-button" data-action="on" data-topic="home/motor" data-label="Motor Start" data-state="on">Start</button>
+                    <button class="control-button" data-action="off" data-topic="home/motor" data-label="Motor Stop" data-state="off">Stop</button>
+                </div>
+            </article>
+
+            <article class="card grid-span-2" data-device="servo" tabindex="0">
+                <div class="device-header">
+                    <div class="device-meta">
+                        <h2>Servo Motor</h2>
+                        <span>Window Blind (0–180°)</span>
+                        <div class="timestamp" data-timestamp="servo">—</div>
+                    </div>
+                    <div class="device-icon" aria-hidden="true">🔄</div>
+                </div>
+                <div class="status-badge running" data-status="servo">90°</div>
+                <div class="servo-control" aria-label="Servo angle control">
+                    <label for="servoSlider">Adjust angle</label>
+                    <input type="range" min="0" max="180" value="90" id="servoSlider" class="range-input" aria-valuemin="0" aria-valuemax="180" aria-valuenow="90" aria-label="Servo angle slider">
+                    <div class="servo-angle" id="servoAngleValue">90°</div>
+                </div>
+                <button class="control-button" data-action="servo-send" data-topic="home/servo" data-state="on" aria-label="Send servo angle">Send Angle</button>
+            </article>
+
+            <article class="card activity-log" tabindex="0" aria-live="polite">
+                <div class="device-header">
+                    <div class="device-meta">
+                        <h2>Activity Log</h2>
+                        <span>Last 5 commands</span>
+                    </div>
+                    <div class="device-icon" aria-hidden="true">📜</div>
+                </div>
+                <ul class="activity-list" id="activityLog">
+                    <li class="activity-item">Waiting for commands…</li>
+                </ul>
+            </article>
+
+            <article class="card energy-card" tabindex="0">
+                <div class="device-header">
+                    <div class="device-meta">
+                        <h2>Energy Snapshot</h2>
+                        <span>Mock metrics</span>
+                    </div>
+                    <div class="device-icon" aria-hidden="true">⚡</div>
+                </div>
+                <div class="energy-stats" id="energyStats">
+                    <div class="energy-chip">
+                        <strong>Today</strong>
+                        <p>1.9 kWh</p>
+                    </div>
+                    <div class="energy-chip">
+                        <strong>This Week</strong>
+                        <p>12.3 kWh</p>
+                    </div>
+                    <div class="energy-chip">
+                        <strong>Projected</strong>
+                        <p>18% saving</p>
                     </div>
                 </div>
+                <button class="link-button" id="exportSettings">Export Settings</button>
             </article>
         </section>
 
-        <section class="glass card" aria-label="Scenes and automation">
-            <div class="section-head">
-                <h2>Scene Automation</h2>
-                <div>
-                    <button class="ghost sm" id="createSceneBtn">➕ Custom Scene</button>
-                    <button class="ghost sm" id="manageScenesBtn">⚙️ Manage</button>
-                </div>
-            </div>
-            <div class="scene-grid" id="sceneGrid"></div>
-        </section>
-
-        <section class="grid device-grid" id="deviceGrid" aria-label="Device management"></section>
-
-        <section class="grid monitoring">
-            <article class="card glass">
-                <div class="section-head">
-                    <h2>Activity Timeline</h2>
-                    <span id="commandCount">0 cmds</span>
-                </div>
-                <ul id="activityTimeline" class="timeline"></ul>
-            </article>
-            <article class="card glass">
-                <h2>Live Queue</h2>
-                <div id="queueVisualizer" class="queue-visualizer"></div>
-            </article>
-            <article class="card glass">
-                <h2>Device History</h2>
-                <div id="deviceHistory" class="history"></div>
-            </article>
-        </section>
-
-        <section class="grid dataviz">
-            <article class="card glass">
-                <h2>Servo Position History</h2>
-                <div id="servoChart"></div>
-            </article>
-            <article class="card glass">
-                <h2>Device On/Off Duration</h2>
-                <div id="durationChart"></div>
-            </article>
-            <article class="card glass">
-                <h2>Energy Distribution</h2>
-                <div id="energyDonut"></div>
-            </article>
-            <article class="card glass">
-                <h2>Command Activity</h2>
-                <div id="activityArea"></div>
-            </article>
-            <article class="card glass">
-                <h2>Usage Heatmap</h2>
-                <div id="usageHeatmap"></div>
-            </article>
-        </section>
-
-        <section class="grid advanced">
-            <article class="card glass">
-                <h2>Advanced Controls</h2>
-                <div class="control-row">
-                    <label>Voice Command</label>
-                    <div class="input-row">
-                        <input type="text" id="voiceInput" placeholder="e.g. turn on led1">
-                        <button class="primary sm" id="voiceSubmit">Send</button>
-                    </div>
-                </div>
-                <div class="control-row">
-                    <label>Batch Operations</label>
-                    <div class="input-row">
-                        <select id="batchSelect">
-                            <option value="all-on">All On</option>
-                            <option value="all-off">All Off</option>
-                            <option value="lights-on">Lights On</option>
-                            <option value="motor-cycle">Motor Cycle</option>
-                        </select>
-                        <button class="ghost sm" id="batchExecute">Run</button>
-                    </div>
-                </div>
-                <div class="control-row">
-                    <label>Device Profile</label>
-                    <div class="input-row">
-                        <select id="profileSelect">
-                            <option value="eco">Eco Saver</option>
-                            <option value="comfort">Comfort</option>
-                            <option value="party">Party Mode</option>
-                        </select>
-                        <button class="ghost sm" id="profileApply">Apply</button>
-                    </div>
-                </div>
-                <p class="hotkeys">Keyboard: Space toggle focused device · Arrows servo · Ctrl+M motor</p>
-            </article>
-
-            <article class="card glass">
-                <h2>User Preferences</h2>
-                <form id="preferencesForm" class="prefs">
-                    <label>
-                        Theme
-                        <select name="theme">
-                            <option value="dark">Dark</option>
-                            <option value="light">Light</option>
-                            <option value="auto">Auto</option>
-                        </select>
-                    </label>
-                    <label>
-                        Notifications
-                        <select name="notifications">
-                            <option value="toast-sound">Toast + Sound</option>
-                            <option value="toast">Toast only</option>
-                            <option value="silent">Silent</option>
-                        </select>
-                    </label>
-                    <label>
-                        Default Servo Angle
-                        <input type="number" name="servoDefault" min="0" max="180" value="90">
-                    </label>
-                    <label>
-                        Auto reconnect
-                        <select name="autoReconnect">
-                            <option value="on">On</option>
-                            <option value="off">Off</option>
-                        </select>
-                    </label>
-                    <label>
-                        Session Timeout (min)
-                        <input type="number" name="sessionTimeout" min="1" max="120" value="15">
-                    </label>
-                    <div class="prefs-actions">
-                        <button type="submit" class="primary sm">Save</button>
-                        <button type="button" id="exportData" class="ghost sm">Export JSON</button>
-                        <label class="ghost sm file-label">
-                            Import
-                            <input type="file" id="importData" accept="application/json">
-                        </label>
-                    </div>
-                </form>
-            </article>
-
-            <article class="card glass">
-                <h2>Security & Notifications</h2>
-                <div class="security-grid">
-                    <button class="ghost sm" id="lockConsole">🔒 Lock Console</button>
-                    <button class="ghost sm" id="enableDesktopNoti">🖥️ Desktop Alerts</button>
-                    <label class="toggle">
-                        <input type="checkbox" id="criticalConfirm" checked>
-                        <span>Action Confirmations</span>
-                    </label>
-                    <label class="toggle">
-                        <input type="checkbox" id="soundEffects" checked>
-                        <span>FX</span>
-                    </label>
-                </div>
-                <div class="log" id="activityLog"></div>
-            </article>
-        </section>
-
-        <footer class="glass footer">
+        <footer class="glass-panel footer" aria-label="System info">
             <div>
-                <strong>SmartNest v1.0.0</strong> · Branch strategy: main / develop · CI ready
+                Connection retries: <span id="retryCount">0</span>
+                | Queue: <span id="queueCount">0</span>
             </div>
             <div>
-                <span id="sessionStatus">Session active</span> · <button class="link" id="openDocs">Deployment Guide</button>
+                Voice commands ready • <span class="badge">ESP8266</span>
             </div>
         </footer>
     </main>
 
-    <nav class="mobile-nav">
-        <button data-nav="devices" class="active">Devices</button>
-        <button data-nav="scenes">Scenes</button>
-        <button data-nav="analytics">Analytics</button>
-        <button data-nav="settings">Settings</button>
-    </nav>
+    <script>
+        const brokerUrl = 'wss://b6340d49c97943efbdd999a355bd00d0.s1.eu.hivemq.cloud:8884/mqtt';
+        const mqttOptions = {
+            username: 'sarthak',
+            password: 'Sarthak@825',
+            keepalive: 60,
+            clean: true,
+            reconnectPeriod: 0,
+            clientId: 'smartnest-' + Math.random().toString(16).slice(2, 10)
+        };
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/5.3.5/mqtt.umd.min.js" integrity="sha512-2ySGIN1qNbfXDnpa9eKJeNEqXWiwxupCSvJzpuG1HsfrN7kYM/qf+oCuWHa3gwxM/H2ymlk/wEYBLETymFcpPg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/blueimp-md5/2.19.0/js/md5.min.js" integrity="sha512-McQwDFi1Cdm42Hcps225y7sY9qsK0kGugHgdGXNq35p3xNmPR9U1FVLtZL1NVr7DiIP9N6byjHgNsZM3Rp3crw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-    <script src="app.js" type="module"></script>
+        const defaultState = {
+            led1: 'off',
+            led2: 'off',
+            bulb: 'off',
+            motor: 'off',
+            servo: 90
+        };
+
+        const state = JSON.parse(localStorage.getItem('smartnest-state') || JSON.stringify(defaultState));
+        const activityLog = [];
+        const commandQueue = [];
+        const connectionStatusEl = document.getElementById('connectionStatus');
+        const queueCountEl = document.getElementById('queueCount');
+        const retryCountEl = document.getElementById('retryCount');
+        const servoSlider = document.getElementById('servoSlider');
+        const servoAngleValue = document.getElementById('servoAngleValue');
+        const toastContainer = document.querySelector('.toast-container');
+        let client;
+        let retryAttempts = 0;
+        let backoff = 2000;
+        let reconnectTimer;
+
+        const toast = (message, type = 'info') => {
+            const toastEl = document.createElement('div');
+            toastEl.className = 'toast';
+            toastEl.textContent = message;
+            toastEl.setAttribute('role', 'status');
+            toastContainer.appendChild(toastEl);
+            setTimeout(() => toastEl.remove(), 4500);
+        };
+
+        const persistState = () => {
+            localStorage.setItem('smartnest-state', JSON.stringify(state));
+        };
+
+        const updateDeviceUI = (device) => {
+            const card = document.querySelector(`.card[data-device="${device}"]`);
+            if (!card) return;
+            const badge = card.querySelector('[data-status]');
+            const timestamp = card.querySelector('[data-timestamp]');
+            const buttons = card.querySelectorAll('.control-button[data-action]');
+
+            if (device === 'servo') {
+                badge.textContent = `${state.servo}°`;
+                badge.className = 'status-badge running';
+                servoSlider.value = state.servo;
+                servoSlider.setAttribute('aria-valuenow', state.servo);
+                servoAngleValue.textContent = `${state.servo}°`;
+            } else {
+                badge.textContent = state[device].toUpperCase();
+                badge.className = `status-badge ${state[device]}`;
+                buttons.forEach(btn => {
+                    const isActive = btn.dataset.action === state[device];
+                    btn.classList.toggle('active', isActive);
+                    btn.setAttribute('aria-pressed', isActive);
+                });
+            }
+
+            timestamp.textContent = new Date().toLocaleTimeString();
+        };
+
+        const recordActivity = (label, payload) => {
+            activityLog.unshift({ label, payload, time: new Date().toLocaleTimeString() });
+            activityLog.splice(5);
+            const list = document.getElementById('activityLog');
+            list.innerHTML = activityLog.map(item => `
+                <li class="activity-item">
+                    <span>${item.label}</span>
+                    <span>${item.payload} · ${item.time}</span>
+                </li>`).join('');
+        };
+
+        const flushQueue = () => {
+            while (commandQueue.length && client.connected) {
+                const cmd = commandQueue.shift();
+                client.publish(cmd.topic, cmd.payload, {}, cmd.callback);
+            }
+            queueCountEl.textContent = commandQueue.length;
+        };
+
+        const queueCommand = (topic, payload, callback) => {
+            if (client && client.connected) {
+                client.publish(topic, payload, {}, callback);
+            } else {
+                commandQueue.push({ topic, payload, callback });
+                queueCountEl.textContent = commandQueue.length;
+                toast('Offline. Command queued.');
+            }
+        };
+
+        const exponentialBackoff = () => {
+            clearTimeout(reconnectTimer);
+            reconnectTimer = setTimeout(connectBroker, backoff);
+            backoff = Math.min(backoff * 1.8, 20000);
+            retryAttempts += 1;
+            retryCountEl.textContent = retryAttempts;
+        };
+
+        const connectBroker = () => {
+            connectionStatusEl.classList.remove('connected', 'error');
+            connectionStatusEl.querySelector('.status-text').textContent = 'Connecting…';
+            if (client) {
+                try { client.end(true); } catch (_) {}
+            }
+
+            client = mqtt.connect(brokerUrl, mqttOptions);
+
+            client.on('connect', () => {
+                connectionStatusEl.classList.add('connected');
+                connectionStatusEl.querySelector('.status-text').textContent = 'Connected';
+                toast('Connected to HiveMQ Cloud', 'success');
+                backoff = 2000;
+                retryAttempts = 0;
+                retryCountEl.textContent = retryAttempts;
+                ['home/led1', 'home/led2', 'home/bulb', 'home/motor', 'home/servo'].forEach(topic => client.subscribe(topic));
+                flushQueue();
+            });
+
+            client.on('reconnect', () => {
+                connectionStatusEl.classList.remove('connected');
+                connectionStatusEl.querySelector('.status-text').textContent = 'Reconnecting…';
+            });
+
+            client.on('error', (err) => {
+                console.error('MQTT error', err);
+                connectionStatusEl.classList.add('error');
+                connectionStatusEl.querySelector('.status-text').textContent = 'Connection error';
+                toast('MQTT error encountered', 'error');
+                exponentialBackoff();
+            });
+
+            client.on('offline', () => {
+                connectionStatusEl.classList.add('error');
+                connectionStatusEl.querySelector('.status-text').textContent = 'Offline';
+            });
+
+            client.on('close', () => {
+                if (!navigator.onLine) {
+                    connectionStatusEl.querySelector('.status-text').textContent = 'Offline (network)';
+                }
+            });
+
+            client.on('message', (topic, payload) => {
+                const value = payload.toString();
+                if (topic.includes('servo')) {
+                    state.servo = parseInt(value, 10);
+                    updateDeviceUI('servo');
+                } else {
+                    const device = topic.split('/')[1];
+                    state[device] = value.toLowerCase();
+                    updateDeviceUI(device);
+                }
+                persistState();
+            });
+        };
+
+        const sendCommand = (topic, payload, device, actionLabel) => {
+            queueCommand(topic, payload, (err) => {
+                if (err) {
+                    toast('Failed to send command', 'error');
+                    return;
+                }
+                if (device === 'servo') {
+                    state.servo = parseInt(payload, 10);
+                } else {
+                    state[device] = payload.toLowerCase();
+                }
+                persistState();
+                updateDeviceUI(device);
+                recordActivity(actionLabel, payload);
+                toast('Command sent: ' + actionLabel);
+            });
+        };
+
+        document.querySelectorAll('.control-button[data-action]').forEach(button => {
+            button.addEventListener('click', () => {
+                const device = button.closest('.card').dataset.device;
+                if (button.dataset.action === 'servo-send') {
+                    const angle = servoSlider.value;
+                    sendCommand('home/servo', angle, 'servo', 'Servo angle');
+                } else {
+                    sendCommand(button.dataset.topic, button.dataset.action.toUpperCase(), device, button.dataset.label || device);
+                }
+            });
+        });
+
+        document.querySelectorAll('.quick-button').forEach(button => {
+            button.addEventListener('click', () => {
+                const preset = button.dataset.preset;
+                const actions = {
+                    'all-on': () => {
+                        sendCommand('home/led1', 'ON', 'led1', 'LED 1');
+                        sendCommand('home/led2', 'ON', 'led2', 'LED 2');
+                        sendCommand('home/bulb', 'ON', 'bulb', 'Bulb');
+                    },
+                    'night': () => {
+                        sendCommand('home/led1', 'OFF', 'led1', 'LED 1');
+                        sendCommand('home/led2', 'ON', 'led2', 'LED 2');
+                        sendCommand('home/bulb', 'OFF', 'bulb', 'Bulb');
+                        sendCommand('home/motor', 'OFF', 'motor', 'Motor');
+                        sendCommand('home/servo', '10', 'servo', 'Servo');
+                    },
+                    'goodbye': () => {
+                        ['led1', 'led2', 'bulb', 'motor'].forEach(device => {
+                            sendCommand(`home/${device}`, 'OFF', device, device);
+                        });
+                    },
+                    'morning': () => {
+                        sendCommand('home/led1', 'ON', 'led1', 'LED 1');
+                        sendCommand('home/led2', 'ON', 'led2', 'LED 2');
+                        sendCommand('home/bulb', 'ON', 'bulb', 'Bulb');
+                        sendCommand('home/servo', '45', 'servo', 'Servo');
+                    }
+                };
+                actions[preset]?.();
+            });
+        });
+
+        servoSlider.addEventListener('input', (event) => {
+            const value = event.target.value;
+            servoAngleValue.textContent = `${value}°`;
+            servoSlider.setAttribute('aria-valuenow', value);
+        });
+
+        document.getElementById('darkModeToggle').addEventListener('change', (event) => {
+            document.body.dataset.theme = event.target.checked ? 'dark' : 'light';
+        });
+
+        document.getElementById('contrastToggle').addEventListener('change', (event) => {
+            document.body.dataset.contrast = event.target.checked ? 'high' : 'normal';
+        });
+
+        document.getElementById('exportSettings').addEventListener('click', () => {
+            const data = JSON.stringify(state, null, 2);
+            const blob = new Blob([data], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'smartnest-settings.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            toast('Settings exported');
+        });
+
+        window.addEventListener('online', () => {
+            toast('Network restored, reconnecting…');
+            connectBroker();
+        });
+
+        window.addEventListener('offline', () => {
+            connectionStatusEl.classList.add('error');
+            connectionStatusEl.querySelector('.status-text').textContent = 'Offline (network)';
+            toast('You are offline. Commands will queue.');
+        });
+
+        const init = () => {
+            Object.keys(state).forEach(updateDeviceUI);
+            connectBroker();
+            setInterval(() => {
+                document.getElementById('energyStats').innerHTML = [
+                    { label: 'Today', value: (1 + Math.random()).toFixed(2) + ' kWh' },
+                    { label: 'This Week', value: (10 + Math.random() * 5).toFixed(1) + ' kWh' },
+                    { label: 'Projected', value: (10 + Math.random() * 15).toFixed(0) + '% saving' },
+                ].map(stat => `
+                    <div class="energy-chip">
+                        <strong>${stat.label}</strong>
+                        <p>${stat.value}</p>
+                    </div>`).join('');
+            }, 6000);
+        };
+
+        init();
+    </script>
 </body>
 </html>
-
