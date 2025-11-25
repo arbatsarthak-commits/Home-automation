@@ -8,7 +8,7 @@ import streamlit as st
 
 MQTT_BROKER = os.environ.get("MQTT_BROKER", "wss://b6340d49c97943efbdd999a355bd00d0.s1.eu.hivemq.cloud:8884/mqtt")
 MQTT_USERNAME = os.environ.get("MQTT_USERNAME", "sarthak")
-MQTT_PASSWORD = os.environ.get("MQTT_PASSWORD", "Sarthak@825")
+MQTT_PASSWORD = os.environ.get("MQTT_PASSWORD", "Sarthaak@825")
 
 st.set_page_config(page_title="SmartNest Control Center", layout="wide", page_icon="⚡")
 
